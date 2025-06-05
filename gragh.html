@@ -7,6 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
     <script src="https://cdn.jsdelivr.net/npm/d3-cloud@1.2.5/build/d3.layout.cloud.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/wordcloud2.js@2.0.1/wordcloud2.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -50,11 +51,19 @@
         });
 
         function fetchExcelData() {
-            const githubUrl = 'https://raw.githubusercontent.com/yanziyingfei/wordcloud/main/1_danmakus.xlsx';
-            fetch(githubUrl)
-                .then(response => response.arrayBuffer())
+            const githubApiUrl = 'https://api.github.com/repos/yanziyingfei/wordcloud/main/1_danmakus.xlsx';
+            
+            fetch(githubApiUrl)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('请求失败');
+                    }
+                    return response.json();
+                })
                 .then(data => {
-                    const workbook = XLSX.read(data, { type: 'array' });
+                    const base64Content = atob(data.content.replace(/^data:application\/octet-stream;base64,/, ""));
+                    const arrayBuffer = stringToArrayBuffer(base64Content);
+                    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
                     const sheet = workbook.Sheets[workbook.SheetNames[0]];
                     const jsonData = XLSX.utils.sheet_to_json(sheet);
                     generateWordCloudFromData(jsonData);
@@ -65,69 +74,77 @@
                 });
         }
 
+        function stringToArrayBuffer(base64) {
+            const binary_string = atob(base64);
+            const len = binary_string.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binary_string.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
         function generateWordCloudFromData(data) {
-            // 只提取“内容”列的数据并统计词频
+            let contentColumnIndex = -1;
+            const headers = Object.keys(data[0]);
+            contentColumnIndex = headers.findIndex(header => 
+                header.toLowerCase().includes('内容') || 
+                header.toLowerCase().includes('content') ||
+                header.toLowerCase().includes('danmu')
+            );
+
+            if (contentColumnIndex === -1) {
+                document.getElementById('word-cloud').innerHTML = '<div class="loading">未找到"内容"列</div>';
+                return;
+            }
+
+            const contentColumnName = headers[contentColumnIndex];
+
             const wordFrequency = {};
             data.forEach(row => {
                 if (contentColumnName in row) {
                     const text = row[contentColumnName].toString();
                     const words = text.split(/\s+/);
                     words.forEach(word => {
-                        if (word.length > 1) { // 忽略单字词
+                        if (word.length > 1) {
                             wordFrequency[word] = (wordFrequency[word] || 0) + 1;
                         }
                     });
                 }
             });
 
-            // 准备词云数据
             const words = Object.entries(wordFrequency)
-                .filter(([word, count]) => count >= 2) // 只显示出现至少2次的词
-                .sort((a, b) => b[1] - a[1]) // 按频率排序
-                .slice(0, 100) // 取前100个词
-                .map(([word, count]) => ({ text: word, size: count }));
+                .filter(([word, count]) => count >= 2)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 100)
+                .map(([word, count]) => ({ text: word, weight: count }));
 
-            // 清空词云容器
             document.getElementById('word-cloud').innerHTML = '';
             
-            // 如果没有足够的词，显示提示信息
             if (words.length === 0) {
                 document.getElementById('word-cloud').innerHTML = '<div class="loading">未找到足够的词来生成词云</div>';
                 return;
             }
 
-            // 创建词云
             const width = document.getElementById('word-cloud').offsetWidth;
             const height = document.getElementById('word-cloud').offsetHeight;
-            
-            d3.layout.cloud()
-                .size([width, height])
-                .words(words)
-                .padding(5)
-                .rotate(() => Math.random() * 2 * 90)
-                .font("Arial")
-                .fontSize(d => d.size * 2)
-                .on("end", draw)
-                .start();
 
-            function draw(words) {
-                d3.select("#word-cloud")
-                    .append("svg")
-                    .attr("width", width)
-                    .attr("height", height)
-                    .append("g")
-                    .attr("transform", `translate(${width / 2},${height / 2})`)
-                    .selectAll("text")
-                    .data(words)
-                    .enter()
-                    .append("text")
-                    .style("font-size", d => `${d.size * 5}px`)
-                    .style("font-family", "Arial, sans-serif")
-                    .style("fill", () => `#${Math.floor(Math.random() * 16777215).toString(16)}`)
-                    .attr("text-anchor", "middle")
-                    .attr("transform", d => `translate(${d.x},${d.y}) rotate(${d.rotate})`)
-                    .text(d => d.text);
-            }
+            var wordCloud = new WordCloud(document.getElementById('word-cloud'), {
+                gridSize: 16,
+                weightFactor: function(word) { return word.weight; },
+                drawBoundingBox: true,
+                wait: 0,
+                color: function(word, weight) {
+                    return `hsl(${Math.random() * 360}, 70%, 50%)`;
+                },
+                draw: function(data) {
+                    this.context.clearRect(0, 0, this.size[0], this.size[1]);
+                    this.context.fillStyle = 'rgba(255, 255, 255, 1)';
+                    this.context.fillRect(0, 0, this.size[0], this.size[1]);
+                    this.drawWords(data);
+                },
+                words: words
+            });
         }
     </script>
 </body>
