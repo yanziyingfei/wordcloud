@@ -1,151 +1,60 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>弹幕词云图</title>
-    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-    <script src="https://cdn.jsdelivr.net/npm/d3-cloud@1.2.5/build/d3.layout.cloud.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/wordcloud2.js@2.0.1/wordcloud2.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f9f9f9;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        h1 {
-            text-align: center;
-            color: #333;
-        }
-        #word-cloud {
-            width: 100%;
-            height: 500px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            background-color: white;
-        }
-        .loading {
-            text-align: center;
-            padding: 50px;
-            color: #666;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>弹幕词云图</h1>
-        <div id="word-cloud" class="loading">
-            加载中...
-        </div>
-    </div>
+import requests
+import xml.etree.ElementTree as ET
+import pandas as pd
+from datetime import datetime
+import jieba
+from wordcloud import WordCloud
+import matplotlib.pyplot as plt
+import numpy as np
+from PIL import Image
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            fetchExcelData();
-        });
+# 新增词云生成函数
+def generate_wordcloud(input_file='1_danmakus.xlsx', output_file='danmaku_wordcloud.png'):
+    try:
+        # 读取Excel文件
+        df = pd.read_excel(input_file)
+        danmaku_text = ' '.join(df['内容'].tolist())
+        
+        # 分词
+        words = list(jieba.cut(danmaku_text))
+        
+        # 中性词列表及其权重
+        neutral_words = ['可以', '觉得', '感觉', '一般', '还行', '还好', '不错', '可以的', '正常', '平常', '普通']
+        for word in neutral_words:
+            words.extend([word] * 20)  # 每个中性词增加20次出现
+        
+        words = ' '.join(words)
+        
+        # 创建词云
+        wc = WordCloud(
+            font_path='simhei.ttf',  # 中文字体
+            width=1000,
+            height=700,
+            background_color='white',
+            max_words=200,
+            max_font_size=200,
+            min_font_size=20,
+            relative_scaling=0.5,  # 词频和字体大小的关联度
+            prefer_horizontal=1.0,  # 强制所有词水平排列
+            collocations=False,  # 避免重复词语
+            random_state=42,
+            margin=0,  # 词之间的间距
+            scale=3  # 图像缩放比例
+        ).generate(words)
+        
+        # 保存词云图
+        wc.to_file(output_file)
+        print(f"词云图已保存至 {output_file}")
+        
+        # 显示词云图
+        plt.figure(figsize=(10, 8))
+        plt.imshow(wc, interpolation='bilinear')
+        plt.axis('off')
+        plt.show()
+        
+    except Exception as e:
+        print(f"生成词云时出错: {e}")
 
-        function fetchExcelData() {
-            const githubApiUrl = 'https://api.github.com/repos/yanziyingfei/wordcloud/main/1_danmakus.xlsx';
-            
-            fetch(githubApiUrl)
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('请求失败');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    const base64Content = atob(data.content.replace(/^data:application\/octet-stream;base64,/, ""));
-                    const arrayBuffer = stringToArrayBuffer(base64Content);
-                    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const jsonData = XLSX.utils.sheet_to_json(sheet);
-                    generateWordCloudFromData(jsonData);
-                })
-                .catch(error => {
-                    console.error('加载Excel文件失败:', error);
-                    document.getElementById('word-cloud').innerHTML = '<div class="loading">加载Excel文件失败</div>';
-                });
-        }
-
-        function stringToArrayBuffer(base64) {
-            const binary_string = atob(base64);
-            const len = binary_string.length;
-            const bytes = new Uint8Array(len);
-            for (let i = 0; i < len; i++) {
-                bytes[i] = binary_string.charCodeAt(i);
-            }
-            return bytes.buffer;
-        }
-
-        function generateWordCloudFromData(data) {
-            let contentColumnIndex = -1;
-            const headers = Object.keys(data[0]);
-            contentColumnIndex = headers.findIndex(header => 
-                header.toLowerCase().includes('内容') || 
-                header.toLowerCase().includes('content') ||
-                header.toLowerCase().includes('danmu')
-            );
-
-            if (contentColumnIndex === -1) {
-                document.getElementById('word-cloud').innerHTML = '<div class="loading">未找到"内容"列</div>';
-                return;
-            }
-
-            const contentColumnName = headers[contentColumnIndex];
-
-            const wordFrequency = {};
-            data.forEach(row => {
-                if (contentColumnName in row) {
-                    const text = row[contentColumnName].toString();
-                    const words = text.split(/\s+/);
-                    words.forEach(word => {
-                        if (word.length > 1) {
-                            wordFrequency[word] = (wordFrequency[word] || 0) + 1;
-                        }
-                    });
-                }
-            });
-
-            const words = Object.entries(wordFrequency)
-                .filter(([word, count]) => count >= 2)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 100)
-                .map(([word, count]) => ({ text: word, weight: count }));
-
-            document.getElementById('word-cloud').innerHTML = '';
-            
-            if (words.length === 0) {
-                document.getElementById('word-cloud').innerHTML = '<div class="loading">未找到足够的词来生成词云</div>';
-                return;
-            }
-
-            const width = document.getElementById('word-cloud').offsetWidth;
-            const height = document.getElementById('word-cloud').offsetHeight;
-
-            var wordCloud = new WordCloud(document.getElementById('word-cloud'), {
-                gridSize: 16,
-                weightFactor: function(word) { return word.weight; },
-                drawBoundingBox: true,
-                wait: 0,
-                color: function(word, weight) {
-                    return `hsl(${Math.random() * 360}, 70%, 50%)`;
-                },
-                draw: function(data) {
-                    this.context.clearRect(0, 0, this.size[0], this.size[1]);
-                    this.context.fillStyle = 'rgba(255, 255, 255, 1)';
-                    this.context.fillRect(0, 0, this.size[0], this.size[1]);
-                    this.drawWords(data);
-                },
-                words: words
-            });
-        }
-    </script>
-</body>
-</html>
+# 主程序
+if __name__ == "__main__":
+    generate_wordcloud()
