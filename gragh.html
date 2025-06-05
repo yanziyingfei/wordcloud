@@ -97,6 +97,14 @@
             margin: 0 auto;
             display: block;
         }
+        .error-container {
+            color: red;
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #ffebee;
+        }
     </style>
 </head>
 <body>
@@ -105,6 +113,8 @@
             <h1>弹幕数据分析 - 词云图</h1>
             <p>从Excel文件生成词云图和数据统计</p>
         </header>
+        
+        <div id="error-container" class="error-container" style="display: none;"></div>
         
         <div class="file-upload-container">
             <input type="file" id="excel-file" accept=".xlsx" />
@@ -163,6 +173,10 @@
             const file = event.target.files[0];
             if (!file) return;
             
+            // 显示加载状态
+            document.querySelector('.loading').style.display = 'block';
+            document.getElementById('word-cloud').innerHTML = '<div class="loading">正在处理文件，请稍候...</div>';
+            
             // 创建文件读取对象
             const reader = new FileReader();
             reader.onload = function(e) {
@@ -185,7 +199,12 @@
                 } catch (error) {
                     console.error('解析xlsx文件失败:', error);
                     showError('解析弹幕数据失败，请检查文件格式');
+                    document.querySelector('.loading').style.display = 'none';
                 }
+            };
+            reader.onerror = function() {
+                showError('文件读取失败，请检查文件是否损坏或格式不正确');
+                document.querySelector('.loading').style.display = 'none';
             };
             reader.readAsArrayBuffer(file);
         }
@@ -198,12 +217,24 @@
             frequentWords = [];
             totalCount = 0;
             
+            // 检查是否有数据
+            if (jsonData.length === 0) {
+                showError('文件中没有有效的数据');
+                return;
+            }
+            
             // 寻找"弹幕内容"列和"时间"列
             let contentIndex = null;
             let timeIndex = null;
             
             // 查找列索引
             const headers = Object.keys(jsonData[0]);
+            
+            if (headers.length === 0) {
+                showError('文件中没有列数据');
+                return;
+            }
+            
             contentIndex = headers.findIndex(header => 
                 header.toLowerCase().includes('弹幕') || 
                 header.toLowerCase().includes('content') ||
@@ -218,16 +249,33 @@
             );
             
             if (contentIndex === -1) {
-                throw new Error('未找到弹幕内容列');
+                showError('未找到弹幕内容列，请确保文件中有包含"弹幕"、"content"、"msg"或"danmu"等关键词的列');
+                return;
             }
             
             // 解析每一行数据
             let minTime = Infinity;
             let maxTime = 0;
+            let contentCount = 0;
             
             for (let i = 0; i < jsonData.length; i++) {
                 const row = jsonData[i];
-                const content = headers[contentIndex] in row ? row[headers[contentIndex]].toString().trim() : '';
+                const contentKey = headers[contentIndex];
+                
+                // 检查内容列是否存在
+                if (!(contentKey in row)) {
+                    console.warn(`行 ${i + 1} 中缺少弹幕内容`);
+                    continue;
+                }
+                
+                const content = row[contentKey].toString().trim();
+                
+                // 跳过空内容
+                if (!content) {
+                    continue;
+                }
+                
+                contentCount++;
                 
                 // 如果有时间列，解析时间
                 if (timeIndex !== -1 && headers[timeIndex] in row) {
@@ -240,8 +288,15 @@
                 
                 // 统计词频
                 updateWordFrequency(content);
-                totalCount++;
             }
+            
+            // 检查是否有有效的弹幕内容
+            if (contentCount === 0) {
+                showError('文件中没有有效的弹幕内容');
+                return;
+            }
+            
+            totalCount = contentCount;
             
             // 更新时间范围
             timeRange = {
@@ -293,7 +348,8 @@
                 }
                 
                 return null;
-            } catch {
+            } catch (error) {
+                console.warn('解析时间戳失败:', timestamp, error);
                 return null;
             }
         }
@@ -459,12 +515,15 @@
         
         // 显示错误信息
         function showError(message) {
-            document.getElementById('word-cloud').innerHTML = `
-                <div style="text-align: center; color: #ff5252;">
-                    <h3>错误</h3>
-                    <p>${message}</p>
-                </div>
-            `;
+            const errorContainer = document.getElementById('error-container');
+            errorContainer.textContent = message;
+            errorContainer.style.display = 'block';
+            
+            // 清除之前的词云图
+            document.getElementById('word-cloud').innerHTML = '<div style="text-align: center; padding: 50px; color: #666;">' + message + '</div>';
+            
+            // 禁用重新生成按钮
+            document.getElementById('regenerate-btn').disabled = true;
         }
     </script>
 </body>
