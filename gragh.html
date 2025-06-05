@@ -3,527 +3,131 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>弹幕数据分析词云图</title>
+    <title>弹幕词云图</title>
     <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
     <script src="https://cdn.jsdelivr.net/npm/d3-cloud@1.2.5/build/d3.layout.cloud.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
         body {
-            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            font-family: Arial, sans-serif;
             margin: 0;
-            padding: 0;
-            background-color: #f5f5f5;
+            padding: 20px;
+            background-color: #f9f9f9;
         }
         .container {
-            max-width: 1200px;
+            max-width: 800px;
             margin: 0 auto;
-            padding: 20px;
-        }
-        header {
-            text-align: center;
-            margin-bottom: 30px;
-            padding: 20px 0;
-            background-color: #3f51b5;
-            color: white;
-            border-radius: 8px;
         }
         h1 {
-            margin: 0;
-            font-size: 2em;
-        }
-        .main-content {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-        }
-        .word-cloud-container {
-            flex: 2;
-            min-width: 300px;
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-        .stats-container {
-            flex: 1;
-            min-width: 300px;
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-        }
-        .chart-container {
-            height: 300px;
-            margin-top: 20px;
+            text-align: center;
+            color: #333;
         }
         #word-cloud {
-            height: 400px;
-        }
-        .controls {
-            margin-top: 20px;
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-        }
-        button {
-            padding: 8px 16px;
-            background-color: #3f51b5;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #303f9f;
+            width: 100%;
+            height: 500px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: white;
         }
         .loading {
             text-align: center;
             padding: 50px;
             color: #666;
         }
-        .footer {
-            text-align: center;
-            margin-top: 30px;
-            color: #666;
-            font-size: 0.9em;
-        }
-        .file-upload-container {
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        input[type="file"] {
-            margin: 0 auto;
-            display: block;
-        }
-        .error-container {
-            color: red;
-            text-align: center;
-            margin-bottom: 20px;
-            padding: 10px;
-            border-radius: 4px;
-            background-color: #ffebee;
-        }
     </style>
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>弹幕数据分析 - 词云图</h1>
-            <p>从Excel文件生成词云图和数据统计</p>
-        </header>
-        
-        <div id="error-container" class="error-container" style="display: none;"></div>
-        
-        <div class="file-upload-container">
-            <input type="file" id="excel-file" accept=".xlsx" />
-        </div>
-        
-        <div class="main-content">
-            <div class="word-cloud-container">
-                <h2>弹幕词云图</h2>
-                <div id="word-cloud" class="loading">
-                    请上传Excel文件以生成词云图
-                </div>
-                <div class="controls">
-                    <button id="regenerate-btn" disabled>重新生成</button>
-                </div>
-            </div>
-            
-            <div class="stats-container">
-                <h2>弹幕数据统计</h2>
-                <p>总弹幕数: <span id="total-bullets">0</span></p>
-                <p>时间范围: <span id="time-range">-- 至 --</span></p>
-                <p>最多弹幕词: <span id="most-frequent-word">--</span> (<span id="most-frequent-count">0</span>次)</p>
-                
-                <h3>前10高频词统计</h3>
-                <div class="chart-container">
-                    <canvas id="frequency-chart"></canvas>
-                </div>
-            </div>
-        </div>
-        
-        <div class="footer">
-            <p>最后更新: <span id="last-updated">--</span></p>
+        <h1>弹幕词云图</h1>
+        <div id="word-cloud" class="loading">
+            加载中...
         </div>
     </div>
 
     <script>
-        // 全局变量
-        let wordFrequency = {};
-        let mostFrequentWord = { word: '', count: 0 };
-        let frequentWords = [];
-        let totalCount = 0;
-        let timeRange = { start: '', end: '' };
-        let window.frequencyChart = null;
-        
-        // 初始化应用
         document.addEventListener('DOMContentLoaded', function() {
-            const fileInput = document.getElementById('excel-file');
-            const regenerateBtn = document.getElementById('regenerate-btn');
-            
-            fileInput.addEventListener('change', handleFileUpload);
-            
-            regenerateBtn.addEventListener('click', regenerateWordCloud);
+            fetchExcelData();
         });
-        
-        // 处理文件上传
-        function handleFileUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            
-            // 显示加载状态
-            document.querySelector('.loading').style.display = 'block';
-            document.getElementById('word-cloud').innerHTML = '<div class="loading">正在处理文件，请稍候...</div>';
-            
-            // 创建文件读取对象
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    // 解析xlsx文件
-                    const data = new Uint8Array(e.target.result);
+
+        function fetchExcelData() {
+            const githubUrl = 'https://raw.githubusercontent.com/yanziyingfei/wordcloud/main/1_danmakus.xlsx';
+            fetch(githubUrl)
+                .then(response => response.arrayBuffer())
+                .then(data => {
                     const workbook = XLSX.read(data, { type: 'array' });
-                    // 获取第一个sheet
-                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-                    // 转换为JSON对象
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
-                    
-                    // 解析数据
-                    parseExcelData(jsonData);
-                    
-                    // 更新UI状态
-                    document.getElementById('regenerate-btn').disabled = false;
-                    document.querySelector('.loading').style.display = 'none';
-                    
-                } catch (error) {
-                    console.error('解析xlsx文件失败:', error);
-                    showError('解析弹幕数据失败，请检查文件格式');
-                    document.querySelector('.loading').style.display = 'none';
-                }
-            };
-            reader.onerror = function() {
-                showError('文件读取失败，请检查文件是否损坏或格式不正确');
-                document.querySelector('.loading').style.display = 'none';
-            };
-            reader.readAsArrayBuffer(file);
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(sheet);
+                    generateWordCloudFromData(jsonData);
+                })
+                .catch(error => {
+                    console.error('加载Excel文件失败:', error);
+                    document.getElementById('word-cloud').innerHTML = '<div class="loading">加载Excel文件失败</div>';
+                });
         }
-        
-        // 解析Excel数据
-        function parseExcelData(jsonData) {
-            // 重置数据
-            wordFrequency = {};
-            mostFrequentWord = { word: '', count: 0 };
-            frequentWords = [];
-            totalCount = 0;
-            
-            // 检查是否有数据
-            if (jsonData.length === 0) {
-                showError('文件中没有有效的数据');
-                return;
-            }
-            
-            // 寻找"弹幕内容"列和"时间"列
-            let contentIndex = null;
-            let timeIndex = null;
-            
-            // 查找列索引
-            const headers = Object.keys(jsonData[0]);
-            
-            if (headers.length === 0) {
-                showError('文件中没有列数据');
-                return;
-            }
-            
-            contentIndex = headers.findIndex(header => 
-                header.toLowerCase().includes('弹幕') || 
-                header.toLowerCase().includes('content') ||
-                header.toLowerCase().includes('msg') ||
-                header.toLowerCase().includes('danmu')
-            );
-            
-            timeIndex = headers.findIndex(header => 
-                header.toLowerCase().includes('时间') || 
-                header.toLowerCase().includes('time') ||
-                header.toLowerCase().includes('timestamp')
-            );
-            
-            if (contentIndex === -1) {
-                showError('未找到弹幕内容列，请确保文件中有包含"弹幕"、"content"、"msg"或"danmu"等关键词的列');
-                return;
-            }
-            
-            // 解析每一行数据
-            let minTime = Infinity;
-            let maxTime = 0;
-            let contentCount = 0;
-            
-            for (let i = 0; i < jsonData.length; i++) {
-                const row = jsonData[i];
-                const contentKey = headers[contentIndex];
-                
-                // 检查内容列是否存在
-                if (!(contentKey in row)) {
-                    console.warn(`行 ${i + 1} 中缺少弹幕内容`);
-                    continue;
-                }
-                
-                const content = row[contentKey].toString().trim();
-                
-                // 跳过空内容
-                if (!content) {
-                    continue;
-                }
-                
-                contentCount++;
-                
-                // 如果有时间列，解析时间
-                if (timeIndex !== -1 && headers[timeIndex] in row) {
-                    const timestamp = parseTimestamp(row[headers[timeIndex]]);
-                    if (timestamp !== null) {
-                        if (timestamp < minTime) minTime = timestamp;
-                        if (timestamp > maxTime) maxTime = timestamp;
-                    }
-                }
-                
-                // 统计词频
-                updateWordFrequency(content);
-            }
-            
-            // 检查是否有有效的弹幕内容
-            if (contentCount === 0) {
-                showError('文件中没有有效的弹幕内容');
-                return;
-            }
-            
-            totalCount = contentCount;
-            
-            // 更新时间范围
-            timeRange = {
-                start: formatDate(new Date(minTime)),
-                end: formatDate(new Date(maxTime))
-            };
-            
-            // 获取前10高频词
-            frequentWords = Object.entries(wordFrequency)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 10);
-            
-            // 设置最高词频的词
-            if (frequentWords.length > 0) {
-                mostFrequentWord = {
-                    word: frequentWords[0][0],
-                    count: frequentWords[0][1]
-                };
-            }
-            
-            // 更新UI
-            document.getElementById('total-bullets').textContent = totalCount.toLocaleString();
-            document.getElementById('time-range').textContent = `${timeRange.start} 至 ${timeRange.end}`;
-            document.getElementById('most-frequent-word').textContent = mostFrequentWord.word;
-            document.getElementById('most-frequent-count').textContent = mostFrequentWord.count.toLocaleString();
-            
-            // 设置最后更新时间
-            const lastUpdated = new Date();
-            document.getElementById('last-updated').textContent = formatDate(lastUpdated);
-            
-            // 生成词云图和图表
-            generateWordCloud();
-            generateFrequencyChart();
-        }
-        
-        // 解析时间戳
-        function parseTimestamp(timestamp) {
-            try {
-                // 尝试直接解析日期字符串
-                const date = new Date(timestamp);
-                if (!isNaN(date.getTime())) {
-                    return date.getTime();
-                }
-                
-                // 尝试解析为时间戳数字
-                const num = parseInt(timestamp);
-                if (!isNaN(num)) {
-                    return num;
-                }
-                
-                return null;
-            } catch (error) {
-                console.warn('解析时间戳失败:', timestamp, error);
-                return null;
-            }
-        }
-        
-        // 更新词频统计
-        function updateWordFrequency(content) {
-            // 简单的分词处理
-            const words = content.split(/[\s,，。！？、]+/).filter(word => word.length > 0);
-            
-            words.forEach(word => {
-                wordFrequency[word] = (wordFrequency[word] || 0) + 1;
-                
-                // 更新最高词频的词
-                if (wordFrequency[word] > mostFrequentWord.count) {
-                    mostFrequentWord = { word, count: wordFrequency[word] };
+
+        function generateWordCloudFromData(data) {
+            // 只提取“内容”列的数据并统计词频
+            const wordFrequency = {};
+            data.forEach(row => {
+                if (contentColumnName in row) {
+                    const text = row[contentColumnName].toString();
+                    const words = text.split(/\s+/);
+                    words.forEach(word => {
+                        if (word.length > 1) { // 忽略单字词
+                            wordFrequency[word] = (wordFrequency[word] || 0) + 1;
+                        }
+                    });
                 }
             });
-        }
-        
-        // 生成词云图
-        function generateWordCloud() {
+
+            // 准备词云数据
+            const words = Object.entries(wordFrequency)
+                .filter(([word, count]) => count >= 2) // 只显示出现至少2次的词
+                .sort((a, b) => b[1] - a[1]) // 按频率排序
+                .slice(0, 100) // 取前100个词
+                .map(([word, count]) => ({ text: word, size: count }));
+
+            // 清空词云容器
+            document.getElementById('word-cloud').innerHTML = '';
+            
+            // 如果没有足够的词，显示提示信息
+            if (words.length === 0) {
+                document.getElementById('word-cloud').innerHTML = '<div class="loading">未找到足够的词来生成词云</div>';
+                return;
+            }
+
+            // 创建词云
             const width = document.getElementById('word-cloud').offsetWidth;
             const height = document.getElementById('word-cloud').offsetHeight;
             
-            // 清除之前的词云图
-            d3.select("#word-cloud").html("");
-            
-            // 只取前200个高频词，且每个词至少出现2次
-            const wordsData = Object.entries(wordFrequency)
-                .filter(([word, count]) => count >= 2 && word.length > 1)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 200)
-                .map(d => ({ text: d[0], size: Math.sqrt(d[1]) * 2 }));
-            
-            if (wordsData.length === 0) {
-                document.getElementById('word-cloud').innerHTML = '<div style="text-align: center; padding: 50px; color: #666;">没有找到有效的弹幕数据</div>';
-                return;
-            }
-            
-            // 设置词云布局
-            const layout = d3.layout.cloud()
+            d3.layout.cloud()
                 .size([width, height])
-                .words(wordsData)
+                .words(words)
                 .padding(5)
-                .rotate(function() { return Math.floor(Math.random() * 2) * 90; })
-                .font("Microsoft YaHei")
-                .fontSize(d => d.size)
-                .on("end", draw);
-            
-            // 启动词云布局
-            layout.start();
-            
-            // 绘制词云
+                .rotate(() => Math.random() * 2 * 90)
+                .font("Arial")
+                .fontSize(d => d.size * 2)
+                .on("end", draw)
+                .start();
+
             function draw(words) {
                 d3.select("#word-cloud")
                     .append("svg")
-                    .attr("width", layout.size()[0])
-                    .attr("height", layout.size()[1])
+                    .attr("width", width)
+                    .attr("height", height)
                     .append("g")
-                    .attr("transform", `translate(${layout.size()[0] / 2}, ${layout.size()[1] / 2})`)
+                    .attr("transform", `translate(${width / 2},${height / 2})`)
                     .selectAll("text")
                     .data(words)
                     .enter()
                     .append("text")
-                    .style("font-size", d => `${d.size}px`)
-                    .style("font-family", "Microsoft YaHei, 'PingFang SC', Arial, sans-serif")
-                    .style("fill", function() {
-                        // 随机颜色
-                        const colors = ["#FF6B6B", "#4ECDC4", "#FFD166", "#06D6A0", "#118AB2", "#073B4C", "#EF476F", "#FF9F1C", "#2B9348", "#06D6A0"];
-                        return colors[Math.floor(Math.random() * colors.length)];
-                    })
+                    .style("font-size", d => `${d.size * 5}px`)
+                    .style("font-family", "Arial, sans-serif")
+                    .style("fill", () => `#${Math.floor(Math.random() * 16777215).toString(16)}`)
                     .attr("text-anchor", "middle")
-                    .attr("transform", d => `translate(${d.x}, ${d.y}) rotate(${d.rotate})`)
-                    .text(d => d.text)
-                    .on("mouseover", function(event, d) {
-                        d3.select(this)
-                            .transition()
-                            .duration(200)
-                            .style("opacity", 0.7)
-                            .style("cursor", "pointer");
-                    })
-                    .on("mouseout", function(event, d) {
-                        d3.select(this)
-                            .transition()
-                            .duration(200)
-                            .style("opacity", 1);
-                    });
+                    .attr("transform", d => `translate(${d.x},${d.y}) rotate(${d.rotate})`)
+                    .text(d => d.text);
             }
-        }
-        
-        // 重新生成词云图
-        function regenerateWordCloud() {
-            if (!frequentWords || frequentWords.length === 0) return;
-            
-            document.getElementById('word-cloud').innerHTML = '<div class="loading">重新生成中，请稍候...</div>';
-            setTimeout(generateWordCloud, 500); // 添加一点延迟以便看到"重新生成中"的状态
-        }
-        
-        // 生成高频词统计图表
-        function generateFrequencyChart() {
-            const ctx = document.getElementById('frequency-chart').getContext('2d');
-            
-            if (window.frequencyChart) {
-                window.frequencyChart.destroy();
-            }
-            
-            // 准备数据
-            const labels = frequentWords.map(item => item[0]);
-            const data = frequentWords.map(item => item[1]);
-            
-            if (labels.length === 0) {
-                return;
-            }
-            
-            // 创建图表
-            window.frequencyChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: '出现次数',
-                        data: data,
-                        backgroundColor: 'rgba(63, 81, 181, 0.7)',
-                        borderColor: 'rgba(63, 81, 181, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: {
-                                display: true,
-                                text: '出现次数'
-                            }
-                        },
-                        x: {
-                            title: {
-                                display: true,
-                                text: '关键词'
-                            }
-                        }
-                    },
-                    plugins: {
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return `出现次数: ${context.parsed.y.toLocaleString()}`;
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        
-        // 格式化日期
-        function formatDate(date) {
-            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-        }
-        
-        // 显示错误信息
-        function showError(message) {
-            const errorContainer = document.getElementById('error-container');
-            errorContainer.textContent = message;
-            errorContainer.style.display = 'block';
-            
-            // 清除之前的词云图
-            document.getElementById('word-cloud').innerHTML = '<div style="text-align: center; padding: 50px; color: #666;">' + message + '</div>';
-            
-            // 禁用重新生成按钮
-            document.getElementById('regenerate-btn').disabled = true;
         }
     </script>
 </body>
