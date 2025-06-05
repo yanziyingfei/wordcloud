@@ -1,60 +1,40 @@
-import requests
-import xml.etree.ElementTree as ET
-import pandas as pd
-from datetime import datetime
-import jieba
-from wordcloud import WordCloud
-import matplotlib.pyplot as plt
-import numpy as np
-from PIL import Image
-
-# 新增词云生成函数
-def generate_wordcloud(input_file='1_danmakus.xlsx', output_file='danmaku_wordcloud.png'):
-    try:
-        # 读取Excel文件
-        df = pd.read_excel(input_file)
-        danmaku_text = ' '.join(df['内容'].tolist())
-        
-        # 分词
-        words = list(jieba.cut(danmaku_text))
-        
-        # 中性词列表及其权重
-        neutral_words = ['可以', '觉得', '感觉', '一般', '还行', '还好', '不错', '可以的', '正常', '平常', '普通']
-        for word in neutral_words:
-            words.extend([word] * 20)  # 每个中性词增加20次出现
-        
-        words = ' '.join(words)
-        
-        # 创建词云
-        wc = WordCloud(
-            font_path='simhei.ttf',  # 中文字体
-            width=1000,
-            height=700,
-            background_color='white',
-            max_words=200,
-            max_font_size=200,
-            min_font_size=20,
-            relative_scaling=0.5,  # 词频和字体大小的关联度
-            prefer_horizontal=1.0,  # 强制所有词水平排列
-            collocations=False,  # 避免重复词语
-            random_state=42,
-            margin=0,  # 词之间的间距
-            scale=3  # 图像缩放比例
-        ).generate(words)
-        
-        # 保存词云图
-        wc.to_file(output_file)
-        print(f"词云图已保存至 {output_file}")
-        
-        # 显示词云图
-        plt.figure(figsize=(10, 8))
-        plt.imshow(wc, interpolation='bilinear')
-        plt.axis('off')
-        plt.show()
-        
-    except Exception as e:
-        print(f"生成词云时出错: {e}")
-
-# 主程序
-if __name__ == "__main__":
-    generate_wordcloud() 改成在GitHub自建的网页呈现词云图，必须成功，尽量简单点
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>弹幕词云图</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        #word-cloud {
+            text-align: center;
+            margin-top: 20px;
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>弹幕词云图</h1>
+        <div id="word-cloud">
+            <img src="danmaku_wordcloud.png" alt="词云图">
+        </div>
+    </div>
+</body>
+</html>
